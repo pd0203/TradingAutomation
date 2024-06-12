@@ -104,7 +104,7 @@ def send_email(subject, body):
     server.sendmail(email_user, email_send, text)
     server.quit()
 
-def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades, entry_price):
+def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades):
     maker_fee, taker_fee = get_fees(latest['symbol'], leverage)
     qty = balance / latest['close']  # 현재 잔액으로 최대한 매수할 수 있는 코인 수량 계산
     
@@ -348,7 +348,7 @@ def backtest_strategy(symbol, interval, trading_type, position, leverage):
 # Main trading function
 def auto_trading_bot(symbol, interval, trading_type, position, leverage):
     position = 0
-    entry_price = 0
+    entry_price = None
     balance = get_balance()
     total_trades = 0
     winning_trades = 0
@@ -361,7 +361,7 @@ def auto_trading_bot(symbol, interval, trading_type, position, leverage):
         latest = df.iloc[-1]
  
         if trading_type == "triple_rsi":
-            position, entry_price, balance, total_trades, winning_trades, losing_trades = triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades, entry_price)
+            position, entry_price, balance, total_trades, winning_trades, losing_trades = triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades)
         else:
             result = {"error": "Unknown trading type"}
 

@@ -22,6 +22,7 @@ def backtest():
     symbol = data['coin']
     interval = data['interval']
     trading_type = data['trading_type']
+    print("Trading bot started for " + symbol + " with interval " + interval + " and strategy " + trading_type)
     result = backtest_strategy(symbol, interval, trading_type)
     return jsonify(result)
 

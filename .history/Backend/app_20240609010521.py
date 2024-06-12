@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from TradingAutomation import auto_trading_bot, backtest_strategy
+from TradingAutomation import trading_bot
 import threading
 
 app = Flask(__name__)
@@ -8,12 +8,12 @@ CORS(app)
 
 # Endpoint to start trading bot
 @app.route('/start', methods=['POST'])
-def trading_bot():
+def start_trading():
     data = request.json
     symbol = data['coin']
     interval = data['interval']
     trading_type = data['trading_type']
-    threading.Thread(target=auto_trading_bot, args=(symbol, interval, trading_type)).start()
+    threading.Thread(target=trading_bot, args=(symbol, interval, trading_type)).start()
     return jsonify({"status": "Trading bot started for " + symbol + " with interval " + interval + " and strategy " + trading_type})
 
 @app.route('/backtest', methods=['POST'])
@@ -22,7 +22,7 @@ def backtest():
     symbol = data['coin']
     interval = data['interval']
     trading_type = data['trading_type']
-    result = backtest_strategy(symbol, interval, trading_type)
+    result = backtest(symbol, interval, trading_type)
     return jsonify(result)
 
 @app.route('/status', methods=['GET'])

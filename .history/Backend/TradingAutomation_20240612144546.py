@@ -71,23 +71,6 @@ def fetch_indicators(df):
     df['ema_21'] = ta.trend.EMAIndicator(df['close'], window=21).ema_indicator()
     return df
 
-# Get balance from unified trading account
-def get_balance():
-    balance_info = session.get_unified_wallet_balance()
-    balance = balance_info['result']['list'][0]['coin'][0]['available_balance']
-    return balance
-
-# Get fees
-def get_fees(symbol, leverage):
-    # Bybit API를 사용하여 특정 레버리지에 대한 수수료 정보 가져오기
-    fee_info = session.get_last_traded_price(symbol=symbol)
-    maker_fee = fee_info['result']['maker_fee']
-    taker_fee = fee_info['result']['taker_fee']
-    # 레버리지에 따라 수수료율 계산
-    maker_fee *= leverage
-    taker_fee *= leverage
-    return maker_fee, taker_fee
-
 # Send email
 def send_email(subject, body):
     msg = MIMEMultipart()
@@ -104,62 +87,59 @@ def send_email(subject, body):
     server.sendmail(email_user, email_send, text)
     server.quit()
 
-def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades, entry_price):
-    maker_fee, taker_fee = get_fees(latest['symbol'], leverage)
-    qty = balance / latest['close']  # 현재 잔액으로 최대한 매수할 수 있는 코인 수량 계산
+def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades):
+    entry_price = None
+    # Check Conditions for Long Position
+    if (
+        latest['close'] > latest['ema_50'] and
+        latest['rsi_7'] > latest['rsi_14'] and
+        latest['rsi_14'] > latest['rsi_21'] and
+        latest['rsi_7'] > 50 and
+        latest['rsi_14'] > 50 and
+        latest['rsi_21'] > 50 and
+        latest['adx'] > 20
+    ):
+        entry_price = latest['close']
+        send_email("Buy Signal", f"Notification: Long Position Opened\nLeverage: {leverage}\nEntry Price: {entry_price}\nCurrent Total Balance: {balance}")
+        print("Buy signal sent.")
+        # Place long order
+        session.place_active_order(
+            symbol=latest["symbol"],
+            side='Buy',
+            order_type='Market',
+            qty=1,  # Adjust quantity
+            leverage=leverage,
+            time_in_force='GoodTillCancel'
+        )
+        print(f"Long position opened with leverage {leverage}")
+        # Long Position Opened
+        position = 1
     
-    if position == 0:
-        # Check Conditions for Long Position
-        if (
-            latest['close'] > latest['ema_50'] and
-            latest['rsi_7'] > latest['rsi_14'] and
-            latest['rsi_14'] > latest['rsi_21'] and
-            latest['rsi_7'] > 50 and
-            latest['rsi_14'] > 50 and
-            latest['rsi_21'] > 50 and
-            latest['adx'] > 20
-        ):
-            entry_price = latest['close']
-            send_email("Buy Signal", f"Notification: Long Position Opened\nLeverage: {leverage}\nEntry Price: {entry_price}\nCurrent Total Balance: {balance}")
-            print("Buy signal sent.")
-            # Place long order
-            session.place_active_order(
-                symbol=latest["symbol"],
-                side='Buy',
-                order_type='Market',
-                qty=qty,
-                leverage=leverage,
-                time_in_force='GoodTillCancel'
-            )
-            print(f"Long position opened with leverage {leverage}")
-            # Long Position Opened
-            position = 1
-        
-        # Check Conditions for Short Position
-        elif (
-            latest['close'] < latest['ema_50'] and
-            latest['rsi_7'] < latest['rsi_14'] and
-            latest['rsi_14'] < latest['rsi_21'] and
-            latest['rsi_7'] < 50 and
-            latest['rsi_14'] < 50 and
-            latest['rsi_21'] < 50 and
-            latest['adx'] > 20
-        ):
-            entry_price = latest['close']
-            send_email("Sell Signal", f"Notification: Short Position Opened\nLeverage: {leverage}\nEntry Price: {entry_price}\nCurrent Total Balance: {balance}")
-            print("Sell signal sent.")
-            # Place short order
-            session.place_active_order(
-                symbol=latest['symbol'],
-                side='Sell',
-                order_type='Market',
-                qty=qty,
-                leverage=leverage,
-                time_in_force='GoodTillCancel'
-            )
-            print(f"Short position opened with leverage {leverage}")
-            # Short Position Opened
-            position = -1
+    # Check Conditions for Short Position
+    elif (
+        latest['close'] < latest['ema_50'] and
+        latest['rsi_7'] < latest['rsi_14'] and
+        latest['rsi_14'] < latest['rsi_21'] and
+        latest['rsi_7'] < 50 and
+        latest['rsi_14'] < 50 and
+        latest['rsi_21'] < 50 and
+        latest['adx'] > 20
+    ):
+        entry_price = latest['close']
+        send_email("Sell Signal", f"Notification: Short Position Opened\nLeverage: {leverage}\nEntry Price: {entry_price}\nCurrent Total Balance: {balance}")
+        print("Sell signal sent.")
+        # Place short order
+        session.place_active_order(
+            symbol=latest['symbol'],
+            side='Sell',
+            order_type='Market',
+            qty=1,  # Adjust quantity
+            leverage=leverage,
+            time_in_force='GoodTillCancel'
+        )
+        print(f"Short position opened with leverage {leverage}")
+        # Short Position Opened
+        position = -1
     
     # Check conditions to close long position
     elif position == 1 and (
@@ -173,7 +153,7 @@ def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winni
     ):
         exit_price = latest['close']
         profit = (exit_price - entry_price) * leverage
-        balance += profit - (qty * exit_price * taker_fee)
+        balance += profit
         total_trades += 1
         if profit > 0:
             winning_trades += 1
@@ -187,7 +167,7 @@ def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winni
             symbol=latest["symbol"],
             side='Sell',
             order_type='Market',
-            qty=qty,
+            qty=1,  # Adjust quantity
             leverage=leverage,
             time_in_force='GoodTillCancel'
         )
@@ -206,10 +186,10 @@ def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winni
         latest['adx'] < 20
     ):
         exit_price = latest['close']
-        profit = (entry_price - exit_price) * qty * leverage
-        balance += profit - (qty * exit_price * taker_fee)
+        profit_loss = (entry_price - exit_price) * leverage
+        balance += profit_loss
         total_trades += 1
-        if profit > 0:
+        if profit_loss > 0:
             winning_trades += 1
         else:
             losing_trades += 1
@@ -221,7 +201,7 @@ def triple_rsi_strategy(latest, position, leverage, balance, total_trades, winni
             symbol=latest["symbol"],
             side='Buy',
             order_type='Market',
-            qty=qty,
+            qty=1,  # Adjust quantity
             leverage=leverage,
             time_in_force='GoodTillCancel'
         )
@@ -348,8 +328,8 @@ def backtest_strategy(symbol, interval, trading_type, position, leverage):
 # Main trading function
 def auto_trading_bot(symbol, interval, trading_type, position, leverage):
     position = 0
-    entry_price = 0
-    balance = get_balance()
+    entry_price = None
+    balance = 10000  # Initial Total Balance
     total_trades = 0
     winning_trades = 0
     losing_trades = 0
@@ -361,7 +341,7 @@ def auto_trading_bot(symbol, interval, trading_type, position, leverage):
         latest = df.iloc[-1]
  
         if trading_type == "triple_rsi":
-            position, entry_price, balance, total_trades, winning_trades, losing_trades = triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades, entry_price)
+            position, entry_price, balance, total_trades, winning_trades, losing_trades = triple_rsi_strategy(latest, position, leverage, balance, total_trades, winning_trades, losing_trades)
         else:
             result = {"error": "Unknown trading type"}
 

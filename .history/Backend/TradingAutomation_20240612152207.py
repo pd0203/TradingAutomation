@@ -348,7 +348,7 @@ def backtest_strategy(symbol, interval, trading_type, position, leverage):
 # Main trading function
 def auto_trading_bot(symbol, interval, trading_type, position, leverage):
     position = 0
-    entry_price = 0
+    entry_price = None
     balance = get_balance()
     total_trades = 0
     winning_trades = 0
