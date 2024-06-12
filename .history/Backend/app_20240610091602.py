@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from TradingAutomation import auto_trading_bot, backtest_strategy
+from TradingAutomation import auto_trading_bot
 import threading
 
 app = Flask(__name__)
@@ -18,11 +18,12 @@ def trading_bot():
 
 @app.route('/backtest', methods=['POST'])
 def backtest():
+    print("wow")
     data = request.json
     symbol = data['coin']
     interval = data['interval']
     trading_type = data['trading_type']
-    result = backtest_strategy(symbol, interval, trading_type)
+    result = backtest(symbol, interval, trading_type)
     return jsonify(result)
 
 @app.route('/status', methods=['GET'])

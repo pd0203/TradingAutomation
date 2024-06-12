@@ -18,6 +18,7 @@ def trading_bot():
 
 @app.route('/backtest', methods=['POST'])
 def backtest():
+    print("wow")
     data = request.json
     symbol = data['coin']
     interval = data['interval']
